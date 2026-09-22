@@ -64,7 +64,44 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
   ctx.fillStyle = dirtGrad;
   ctx.fillRect(x, y, w, h);
 
-  // pebbles with a light/dark pair for a bit of relief - seeded by the
+  // fine dirt grain - lots of tiny dark specks for texture across the
+  // whole face, seeded so it never reshuffles under camera scroll
+  for (let nx = 3; nx < w - 3; nx += 6) {
+    if (hash1(seed + nx * 0.71 + 900) > 0.55) continue;
+    const ny = 18 + ((nx * 13 + seed * 3) % Math.max(8, h - 22));
+    ctx.fillStyle = `rgba(0,0,0,${(0.05 + hash1(seed + nx + 910) * 0.07).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x + nx, y + ny, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // a few chunky embedded stones with real two-tone shading, for the
+  // "разные камушки" look instead of uniform flat dirt
+  const rockCount = Math.max(1, Math.round(w / 85));
+  for (let i = 0; i < rockCount; i++) {
+    const cellW = w / rockCount;
+    const rx = x + (i + 0.5) * cellW + (hash1(seed + i * 9 + 500) - 0.5) * cellW * 0.5;
+    const ry = y + 19 + hash1(seed + i * 9 + 510) * Math.max(6, h - 30);
+    const rr = 3 + hash1(seed + i * 9 + 520) * 2.6;
+    const grey = 52 + hash1(seed + i * 9 + 530) * 24;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(rx + 0.8, ry + 1.4, rr, rr * 0.78, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const rockGrad = ctx.createRadialGradient(rx - rr * 0.4, ry - rr * 0.4, rr * 0.2, rx, ry, rr);
+    rockGrad.addColorStop(0, `hsl(32, 14%, ${grey}%)`);
+    rockGrad.addColorStop(1, `hsl(28, 18%, ${Math.max(14, grey - 26)}%)`);
+    ctx.fillStyle = rockGrad;
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, rr, rr * 0.78, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(rx - rr * 0.3, ry - rr * 0.3, rr * 0.34, rr * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // small pebbles with a light/dark pair for extra relief - seeded by the
   // platform's own stable identity, never by its on-screen position, so
   // the pattern doesn't reshuffle every frame as the camera scrolls
   for (let sx = 6; sx < w - 4; sx += 17) {
@@ -86,40 +123,45 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
   const bw = w / bumps;
   const baseY = y + 14;
   const bumpPts = [];
-  ctx.beginPath();
-  ctx.moveTo(x, baseY);
-  ctx.lineTo(x, y + 9);
+  let prevEdgeY = y + 9;
   for (let i = 0; i < bumps; i++) {
     const bx0 = x + i * bw;
     const bx1 = bx0 + bw;
     const bxm = (bx0 + bx1) / 2;
     const peakY = y + 2 + hash1(seed + i) * 3;
     const nextY = i === bumps - 1 ? y + 9 : y + 7 + hash1(seed + i + 40) * 3;
-    ctx.quadraticCurveTo(bxm, peakY, bx1, nextY);
-    bumpPts.push([bxm, peakY]);
+    bumpPts.push([bxm, peakY, bx0, bx1, prevEdgeY, nextY]);
+    prevEdgeY = nextY;
   }
-  ctx.lineTo(x + w, baseY);
-  ctx.closePath();
 
-  const grassGrad = ctx.createLinearGradient(x, y, x, baseY);
-  grassGrad.addColorStop(0, '#9beb6f');
-  grassGrad.addColorStop(0.6, '#4fc350');
-  grassGrad.addColorStop(1, grassColor);
-  ctx.fillStyle = grassGrad;
-  ctx.fill();
+  // patchy grass fill - each bump gets its own slightly hue/lightness
+  // shifted gradient so the cap reads as varied living grass, not one
+  // uniform flat green ("разная трава")
+  for (let i = 0; i < bumpPts.length; i++) {
+    const [bxm, peakY, bx0, bx1, edgeY0, edgeY1] = bumpPts[i];
+    ctx.beginPath();
+    ctx.moveTo(bx0, edgeY0);
+    ctx.quadraticCurveTo(bxm, peakY, bx1, edgeY1);
+    ctx.lineTo(bx1, baseY);
+    ctx.lineTo(bx0, baseY);
+    ctx.closePath();
+    const hue = 86 + hash1(seed + i * 3.3 + 70) * 32;
+    const light = 60 + hash1(seed + i * 3.3 + 80) * 10;
+    const patchGrad = ctx.createLinearGradient(bxm, peakY, bxm, baseY);
+    patchGrad.addColorStop(0, `hsl(${hue}, 70%, ${light}%)`);
+    patchGrad.addColorStop(0.55, `hsl(${hue}, 58%, 45%)`);
+    patchGrad.addColorStop(1, grassColor);
+    ctx.fillStyle = patchGrad;
+    ctx.fill();
+  }
 
   // bold cartoon outline along the scalloped ridge for readability
   ctx.strokeStyle = 'rgba(35,90,35,0.55)';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(x, y + 9);
-  for (let i = 0; i < bumps; i++) {
-    const bx0 = x + i * bw;
-    const bx1 = bx0 + bw;
-    const bxm = (bx0 + bx1) / 2;
-    const [, peakY] = bumpPts[i];
-    const nextY = i === bumps - 1 ? y + 9 : y + 7 + hash1(seed + i + 40) * 3;
-    ctx.quadraticCurveTo(bxm, peakY, bx1, nextY);
+  ctx.moveTo(bumpPts[0][2], bumpPts[0][4]);
+  for (const [bxm, peakY, , bx1, , edgeY1] of bumpPts) {
+    ctx.quadraticCurveTo(bxm, peakY, bx1, edgeY1);
   }
   ctx.stroke();
 
@@ -905,10 +947,89 @@ function drawBackground() {
   }
 
   drawHillLayer(0.12, 518, 28, '#d4f3ae', '#a3d888');
+  PONDS.forEach(drawPond);
   drawHut();
+  FENCES.forEach(drawFence);
   drawHillLayer(0.22, 524, 20, '#9be07f', '#5fae54');
   drawTreeLayer();
   drawBushLayer();
+}
+
+const PONDS = [560, 2260];
+const FENCES = [700, 2000];
+
+function drawPond(worldX) {
+  const px = worldX - camX * 0.12;
+  if (px < -60 || px > W + 60) return;
+  const py = 512;
+
+  ctx.fillStyle = 'rgba(70,50,30,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(px, py + 2, 50, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const waterGrad = ctx.createLinearGradient(px, py - 13, px, py + 13);
+  waterGrad.addColorStop(0, '#cdf1fb');
+  waterGrad.addColorStop(1, '#5fb6d6');
+  ctx.fillStyle = waterGrad;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 46, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(60,120,50,0.35)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 46, 13, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.ellipse(px - 10, py - 2, 15, 3.6, 0.15, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(px + 12, py + 3, 10, 2.6, -0.15, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawFence(worldX) {
+  const fx = worldX - camX * 0.12;
+  if (fx < -120 || fx > W + 120) return;
+  const gy = 516;
+
+  ctx.fillStyle = 'rgba(50,30,15,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(fx + 44, gy + 2, 58, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#5a3620';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(fx - 4, gy - 24);
+  ctx.lineTo(fx + 92, gy - 24);
+  ctx.moveTo(fx - 4, gy - 10);
+  ctx.lineTo(fx + 92, gy - 10);
+  ctx.stroke();
+  ctx.strokeStyle = '#a97c4f';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(fx - 4, gy - 26);
+  ctx.lineTo(fx + 92, gy - 26);
+  ctx.moveTo(fx - 4, gy - 12);
+  ctx.lineTo(fx + 92, gy - 12);
+  ctx.stroke();
+
+  for (let i = 0; i < 5; i++) {
+    const postX = fx + i * 23;
+    ctx.fillStyle = '#8a6238';
+    ctx.fillRect(postX - 3.5, gy - 30, 7, 30);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(postX + 1.5, gy - 30, 2, 30);
+    ctx.fillStyle = '#a97c4f';
+    ctx.beginPath();
+    ctx.arc(postX, gy - 30, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function cloud(x, y) {
@@ -969,18 +1090,38 @@ function tree(x, groundY, seed) {
   ctx.fillRect(x, groundY - 12, 3, 12);
 
   const hueShift = hash1(seed * 7 + 1) * 14 - 7;
-  for (let i = 0; i < 3; i++) {
-    const w = 32 - i * 7;
-    const y = groundY - 12 - i * 13;
-    const grad = ctx.createLinearGradient(x - w / 2, y - 20, x + w / 2, y);
-    grad.addColorStop(0, `hsl(${128 + hueShift}, 45%, ${26 + i * 3}%)`);
-    grad.addColorStop(1, `hsl(${128 + hueShift}, 40%, ${38 + i * 3}%)`);
+
+  if (seed % 2 === 0) {
+    // layered pine
+    for (let i = 0; i < 3; i++) {
+      const w = 32 - i * 7;
+      const y = groundY - 12 - i * 13;
+      const grad = ctx.createLinearGradient(x - w / 2, y - 20, x + w / 2, y);
+      grad.addColorStop(0, `hsl(${128 + hueShift}, 45%, ${26 + i * 3}%)`);
+      grad.addColorStop(1, `hsl(${128 + hueShift}, 40%, ${38 + i * 3}%)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(x - w / 2, y);
+      ctx.lineTo(x + w / 2, y);
+      ctx.lineTo(x, y - 20);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else {
+    // rounded fluffy canopy tree, for background variety
+    const cy = groundY - 34;
+    const grad = ctx.createRadialGradient(x - 6, cy - 8, 4, x, cy, 26);
+    grad.addColorStop(0, `hsl(${132 + hueShift}, 50%, 46%)`);
+    grad.addColorStop(1, `hsl(${132 + hueShift}, 42%, 27%)`);
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.moveTo(x - w / 2, y);
-    ctx.lineTo(x + w / 2, y);
-    ctx.lineTo(x, y - 20);
-    ctx.closePath();
+    ctx.arc(x - 12, cy + 7, 15, 0, Math.PI * 2);
+    ctx.arc(x + 12, cy + 7, 15, 0, Math.PI * 2);
+    ctx.arc(x, cy - 8, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.arc(x - 6, cy - 11, 7, 0, Math.PI * 2);
     ctx.fill();
   }
 }
