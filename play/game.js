@@ -7,8 +7,8 @@ const H = canvas.height;
 const GRAVITY = 1400;
 const MOVE_ACCEL = 1800;
 const MAX_SPEED = 380;
-const FRICTION = 1400;
-const JUMP_SPEED = 620;
+const FRICTION = 550;
+const JUMP_SPEED = 660;
 
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; });
@@ -137,6 +137,9 @@ class Star {
     if (this.collected) return;
     ctx.save();
     ctx.translate(this.x - camX, this.y);
+    ctx.rotate(Math.sin(this.t * 0.6) * 0.25);
+    ctx.shadowColor = 'rgba(255,215,0,0.85)';
+    ctx.shadowBlur = 14;
     ctx.fillStyle = '#ffd700';
     ctx.beginPath();
     for (let i = 0; i < 5; i++) {
@@ -236,6 +239,8 @@ class Flag {
     const fx = this.x - camX;
     ctx.fillStyle = '#888';
     ctx.fillRect(fx, this.y, 6, this.h);
+    ctx.shadowColor = 'rgba(255,204,0,0.8)';
+    ctx.shadowBlur = 12;
     ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
     ctx.moveTo(fx + 6, this.y);
@@ -243,6 +248,7 @@ class Flag {
     ctx.lineTo(fx + 6, this.y + 32);
     ctx.closePath();
     ctx.fill();
+    ctx.shadowBlur = 0;
   }
   bounds() {
     return { x: this.x, y: this.y, w: this.w, h: this.h };
@@ -257,6 +263,7 @@ class Player {
     this.onGround = false;
     this.angle = 0;
     this.standingPlatform = null;
+    this.squash = 0;
   }
   bounds() {
     return { x: this.x - this.r, y: this.y - this.r, w: this.r * 2, h: this.r * 2 };
@@ -299,6 +306,7 @@ class Player {
     this.resolveCollisions(platforms, 'y');
 
     this.angle += (this.vx / this.r) * dt;
+    this.squash = Math.max(0, this.squash - dt * 5);
   }
   resolveCollisions(platforms, axis) {
     const b = this.bounds();
@@ -310,6 +318,7 @@ class Player {
         this.vx = 0;
       } else {
         if (this.vy > 0) {
+          this.squash = Math.min(1, this.vy / 900);
           this.y = p.y - this.r;
           this.vy = 0;
           this.onGround = true;
@@ -326,9 +335,14 @@ class Player {
     const px = this.x - camX;
     ctx.save();
     ctx.translate(px, this.y);
+    const sx = 1 + this.squash * 0.22;
+    const sy = 1 - this.squash * 0.3;
+    ctx.scale(sx, sy);
 
     ctx.save();
     ctx.rotate(this.angle);
+    ctx.shadowColor = 'rgba(255,60,60,0.55)';
+    ctx.shadowBlur = 16;
     const grad = ctx.createRadialGradient(-7, -8, 3, 1, 2, this.r * 1.15);
     grad.addColorStop(0, '#ffb3b3');
     grad.addColorStop(0.55, '#f13a3a');
@@ -337,6 +351,7 @@ class Player {
     ctx.beginPath();
     ctx.arc(0, 0, this.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.strokeStyle = 'rgba(138,0,0,0.55)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -837,6 +852,16 @@ function render() {
   for (const b of level.bats) b.draw(camX);
   level.flag.draw(camX);
   player.draw(camX);
+
+  drawVignette();
+}
+
+function drawVignette() {
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(10,10,25,0.28)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
 }
 
 requestAnimationFrame(loop);
