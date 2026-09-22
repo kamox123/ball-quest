@@ -904,9 +904,9 @@ function drawBackground() {
     cloud(cx, 60 + (i % 3) * 40);
   }
 
-  drawHillLayer(0.12, 480, 44, '#d4f3ae', '#a3d888');
+  drawHillLayer(0.12, 518, 28, '#d4f3ae', '#a3d888');
   drawHut();
-  drawHillLayer(0.22, 486, 34, '#9be07f', '#5fae54');
+  drawHillLayer(0.22, 524, 20, '#9be07f', '#5fae54');
   drawTreeLayer();
   drawBushLayer();
 }
@@ -958,7 +958,7 @@ function drawTreeLayer() {
   const spacing = 220;
   for (let i = 0; i < 7; i++) {
     const tx = ((i * spacing - camX * 0.35) % (W + spacing) + (W + spacing)) % (W + spacing) - 60;
-    tree(tx, 478 + (i % 2) * 8, i);
+    tree(tx, 500 + (i % 2) * 8, i);
   }
 }
 
@@ -989,7 +989,7 @@ function drawBushLayer() {
   const spacing = 300;
   for (let i = 0; i < 5; i++) {
     const bx = ((i * spacing - camX * 0.3) % (W + spacing) + (W + spacing)) % (W + spacing) - 80;
-    bush(bx, 480 + (i % 2) * 6);
+    bush(bx, 502 + (i % 2) * 6);
   }
 }
 
@@ -1016,7 +1016,7 @@ function bush(x, groundY) {
 function drawHut() {
   const hx = 1550 - camX * 0.12;
   if (hx < -120 || hx > W + 120) return;
-  const gy = 462;
+  const gy = 508;
   ctx.fillStyle = '#c9a267';
   ctx.fillRect(hx - 22, gy - 34, 44, 34);
   ctx.fillStyle = '#8a5a3b';
