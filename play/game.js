@@ -47,6 +47,14 @@ function drawGrassBlade(x, y, h, lean, width, color) {
   ctx.fill();
 }
 
+// A bold, chunky 3-blade tuft that stays legible at actual gameplay scale
+// (thin hair-thin blades turn into illegible fuzz once zoomed out to 960x540).
+function drawGrassTuft(x, y, hue) {
+  drawGrassBlade(x, y, 10, -6, 3.4, `hsl(${hue - 6},55%,30%)`);
+  drawGrassBlade(x, y, 14, 0, 3.8, `hsl(${hue},60%,40%)`);
+  drawGrassBlade(x, y, 10, 6, 3.4, `hsl(${hue + 6},55%,30%)`);
+}
+
 function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
   const dirtGrad = ctx.createLinearGradient(x, y, x, y + h);
   dirtGrad.addColorStop(0, dirtColor);
@@ -72,82 +80,63 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
     ctx.fill();
   }
 
-  // smooth, rolling grass ridge silhouette (organic curve, not jagged teeth),
-  // seeded per point index (stable)
-  const teeth = Math.max(4, Math.round(w / 9));
-  const tw = w / teeth;
-  const topPts = [];
-  for (let i = 0; i <= teeth; i++) {
-    const gx = x + i * tw;
-    const n = hash1(seed + i * 0.63);
-    const jag = 7 + n * 9 + Math.sin(i * 0.85 + seed) * 2.5;
-    topPts.push([gx, y + jag]);
+  // bold, chunky scalloped grass cap - a few big rounded bumps read far
+  // better at real gameplay zoom than a dense field of hair-thin blades
+  const bumps = Math.max(2, Math.round(w / 34));
+  const bw = w / bumps;
+  const baseY = y + 14;
+  const bumpPts = [];
+  ctx.beginPath();
+  ctx.moveTo(x, baseY);
+  ctx.lineTo(x, y + 9);
+  for (let i = 0; i < bumps; i++) {
+    const bx0 = x + i * bw;
+    const bx1 = bx0 + bw;
+    const bxm = (bx0 + bx1) / 2;
+    const peakY = y + 2 + hash1(seed + i) * 3;
+    const nextY = i === bumps - 1 ? y + 9 : y + 7 + hash1(seed + i + 40) * 3;
+    ctx.quadraticCurveTo(bxm, peakY, bx1, nextY);
+    bumpPts.push([bxm, peakY]);
   }
+  ctx.lineTo(x + w, baseY);
+  ctx.closePath();
 
-  const grassGrad = ctx.createLinearGradient(x, y, x, y + 16);
+  const grassGrad = ctx.createLinearGradient(x, y, x, baseY);
   grassGrad.addColorStop(0, '#9beb6f');
-  grassGrad.addColorStop(0.55, '#57c750');
+  grassGrad.addColorStop(0.6, '#4fc350');
   grassGrad.addColorStop(1, grassColor);
   ctx.fillStyle = grassGrad;
-  ctx.beginPath();
-  ctx.moveTo(x, y + 16);
-  ctx.lineTo(topPts[0][0], topPts[0][1]);
-  for (let i = 1; i < topPts.length; i++) {
-    const [px, py] = topPts[i - 1];
-    const [cx, cy] = topPts[i];
-    ctx.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
-  }
-  ctx.lineTo(topPts[topPts.length - 1][0], topPts[topPts.length - 1][1]);
-  ctx.lineTo(x + w, y + 16);
-  ctx.closePath();
   ctx.fill();
 
-  // soft rim light tracing the curved ridge
-  ctx.strokeStyle = 'rgba(220,255,190,0.5)';
-  ctx.lineWidth = 1.4;
+  // bold cartoon outline along the scalloped ridge for readability
+  ctx.strokeStyle = 'rgba(35,90,35,0.55)';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(topPts[0][0], topPts[0][1]);
-  for (let i = 1; i < topPts.length; i++) {
-    const [px, py] = topPts[i - 1];
-    const [cx, cy] = topPts[i];
-    ctx.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
+  ctx.moveTo(x, y + 9);
+  for (let i = 0; i < bumps; i++) {
+    const bx0 = x + i * bw;
+    const bx1 = bx0 + bw;
+    const bxm = (bx0 + bx1) / 2;
+    const [, peakY] = bumpPts[i];
+    const nextY = i === bumps - 1 ? y + 9 : y + 7 + hash1(seed + i + 40) * 3;
+    ctx.quadraticCurveTo(bxm, peakY, bx1, nextY);
   }
   ctx.stroke();
 
-  // back layer: short, dense, shaded blades for depth
-  const density = teeth * 2;
-  for (let i = 0; i <= density; i++) {
-    const t = i / density;
-    const gx = x + t * w;
-    const gy = topPts[Math.min(topPts.length - 1, Math.floor(t * teeth))][1];
-    if (hash1(seed + i * 1.7 + 200) < 0.4) continue;
-    const bh = 3 + hash1(seed + i * 1.7 + 210) * 3;
-    const lean = (hash1(seed + i * 1.7 + 220) - 0.5) * 3;
-    const hue = 100 + hash1(seed + i * 1.7 + 230) * 18;
-    drawGrassBlade(gx, gy + 2, bh, lean, 1.6, `hsl(${hue},42%,26%)`);
+  // one bold tuft per bump peak, evenly spaced and easy to read at a glance
+  for (let i = 0; i < bumpPts.length; i++) {
+    const [bxm, peakY] = bumpPts[i];
+    const hue = 96 + hash1(seed + i * 2.1 + 60) * 26;
+    drawGrassTuft(bxm, peakY, hue);
   }
 
-  // front layer: taller, brighter, varied blades poking above the ridge
-  for (let i = 0; i <= density; i++) {
-    const t = i / density;
-    const gx = x + t * w + (hash1(seed + i * 2.3) - 0.5) * 3;
-    const gy = topPts[Math.min(topPts.length - 1, Math.floor(t * teeth))][1];
-    if (hash1(seed + i * 2.3 + 300) < 0.42) continue;
-    const bh = 5 + hash1(seed + i * 2.3 + 310) * 7;
-    const lean = (hash1(seed + i * 2.3 + 320) - 0.5) * 6;
-    const hue = 92 + hash1(seed + i * 2.3 + 330) * 32;
-    const light = 40 + hash1(seed + i * 2.3 + 340) * 18;
-    drawGrassBlade(gx, gy, bh, lean, 2.2, `hsl(${hue},55%,${light}%)`);
-  }
-
-  // rare tiny wildflowers for extra life
-  for (let i = 0; i < teeth; i++) {
-    if (hash1(seed + i * 5.1 + 400) <= 0.92) continue;
-    const gx = x + (i + 0.5) * tw;
-    const gy = topPts[i][1] - 2;
+  // rare wildflower for extra life, anchored to a tuft so it never floats
+  for (let i = 0; i < bumpPts.length; i++) {
+    if (hash1(seed + i * 5.1 + 400) <= 0.85) continue;
+    const [bxm, peakY] = bumpPts[i];
     ctx.fillStyle = hash1(seed + i * 5.1 + 410) > 0.5 ? '#fff7cc' : '#ffe27a';
     ctx.beginPath();
-    ctx.arc(gx, gy, 1.4, 0, Math.PI * 2);
+    ctx.arc(bxm, peakY - 13, 2, 0, Math.PI * 2);
     ctx.fill();
   }
 }
