@@ -32,35 +32,72 @@ function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+function hash1(n) {
+  const s = Math.sin(n * 12.9898) * 43758.5453;
+  return s - Math.floor(s);
+}
+
 function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
+  const dirtGrad = ctx.createLinearGradient(x, y, x, y + h);
+  dirtGrad.addColorStop(0, dirtColor);
+  dirtGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
   ctx.fillStyle = dirtColor;
   ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = dirtGrad;
+  ctx.fillRect(x, y, w, h);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  // pebbles with a light/dark pair for a bit of relief
   for (let sx = 6; sx < w - 4; sx += 17) {
-    const sy = 10 + ((sx * 7) % (h - 14));
+    const seed = x + sx;
+    const sy = 14 + ((sx * 7) % Math.max(6, h - 18));
+    const r = 1.6 + hash1(seed) * 1.2;
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.beginPath();
-    ctx.arc(x + sx, y + sy, 2.2, 0, Math.PI * 2);
+    ctx.arc(x + sx, y + sy + 0.8, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath();
+    ctx.arc(x + sx - 0.6, y + sy - 0.6, r * 0.6, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const teeth = Math.max(2, Math.round(w / 13));
+  // irregular jagged grass silhouette (deterministic per x so it doesn't flicker)
+  const teeth = Math.max(3, Math.round(w / 11));
   const tw = w / teeth;
-  ctx.fillStyle = grassColor;
-  ctx.beginPath();
-  ctx.moveTo(x, y + 12);
+  const topPts = [];
   for (let i = 0; i <= teeth; i++) {
     const gx = x + i * tw;
-    const gy = y + (i % 2 === 0 ? 12 : 1);
-    ctx.lineTo(gx, gy);
+    const jag = i % 2 === 0 ? 11 + hash1(x + i) * 4 : 1 + hash1(x + i + 99) * 3;
+    topPts.push([gx, y + jag]);
   }
-  ctx.lineTo(x + w, y);
-  ctx.lineTo(x, y);
+
+  const grassGrad = ctx.createLinearGradient(x, y, x, y + 14);
+  grassGrad.addColorStop(0, '#8fe07a');
+  grassGrad.addColorStop(1, grassColor);
+  ctx.fillStyle = grassGrad;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 14);
+  for (const [gx, gy] of topPts) ctx.lineTo(gx, gy);
+  ctx.lineTo(x + w, y + 14);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillRect(x, y + 12, w, 2);
+  // individual grass blades poking up from the ridge
+  ctx.strokeStyle = 'rgba(60,150,70,0.65)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < topPts.length - 1; i++) {
+    const [gx, gy] = topPts[i];
+    if (hash1(gx) < 0.55) continue;
+    const bh = 3 + hash1(gx + 5) * 4;
+    const lean = (hash1(gx + 11) - 0.5) * 3;
+    ctx.beginPath();
+    ctx.moveTo(gx, gy);
+    ctx.lineTo(gx + lean, gy - bh);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(x, y + 13, w, 1.5);
 }
 
 class Platform {
@@ -110,14 +147,42 @@ class Spike {
   }
   draw(camX) {
     const sx = this.x - camX;
-    ctx.fillStyle = '#c0c0c0';
     const teeth = Math.max(1, Math.round(this.w / 18));
     const tw = this.w / teeth;
+
+    // dark socket the teeth root into
+    ctx.fillStyle = '#3a3a3f';
+    ctx.fillRect(sx, this.y + this.h - 6, this.w, 6);
+
     for (let i = 0; i < teeth; i++) {
+      const bx = sx + i * tw;
+      const tipX = bx + tw / 2;
+      const grad = ctx.createLinearGradient(bx, this.y, bx + tw, this.y);
+      grad.addColorStop(0, '#8a8f99');
+      grad.addColorStop(0.5, '#eef1f5');
+      grad.addColorStop(1, '#7d838d');
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(sx + i * tw, this.y + this.h);
-      ctx.lineTo(sx + i * tw + tw / 2, this.y);
-      ctx.lineTo(sx + i * tw + tw, this.y + this.h);
+      ctx.moveTo(bx, this.y + this.h);
+      ctx.lineTo(tipX, this.y);
+      ctx.lineTo(bx + tw, this.y + this.h);
+      ctx.closePath();
+      ctx.fill();
+
+      // bright edge highlight down the left face for a metallic look
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bx + tw * 0.15, this.y + this.h * 0.85);
+      ctx.lineTo(tipX, this.y + 2);
+      ctx.stroke();
+
+      // dried-blood-red tip glint for menace
+      ctx.fillStyle = 'rgba(180,20,20,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(tipX, this.y);
+      ctx.lineTo(tipX - 2, this.y + 7);
+      ctx.lineTo(tipX + 2, this.y + 7);
       ctx.closePath();
       ctx.fill();
     }
@@ -432,9 +497,8 @@ class Player {
     const sx = 1 + this.squash * 0.22;
     const sy = 1 - this.squash * 0.3;
     ctx.scale(sx, sy);
-
-    ctx.save();
     ctx.rotate(this.angle);
+
     ctx.shadowColor = 'rgba(255,60,60,0.55)';
     ctx.shadowBlur = 16;
     const grad = ctx.createRadialGradient(-7, -8, 3, 1, 2, this.r * 1.15);
@@ -456,9 +520,8 @@ class Player {
     ctx.beginPath();
     ctx.ellipse(-7, -8, 5, 3, -0.5, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
 
-    // friendly face, stays upright while the body rolls
+    // face rotates together with the ball, like a decal on its surface
     const lookX = this.lookX * 1.4;
     const lookY = Math.max(-1, Math.min(1, this.vy / 700)) * 1.2;
 
@@ -770,20 +833,27 @@ function drawBackground() {
   ctx.fillStyle = '#fff8d6';
   ctx.beginPath(); ctx.arc(800, 120, 40, 0, Math.PI * 2); ctx.fill();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
   for (let i = 0; i < 5; i++) {
     const cx = ((i * 400 - camX * 0.25) % (W + 400) + (W + 400)) % (W + 400) - 100;
     cloud(cx, 60 + (i % 3) * 40);
   }
 
-  drawHillLayer(0.12, 480, 44, '#c3eca1');
+  drawHillLayer(0.12, 480, 44, '#d4f3ae', '#a3d888');
   drawHut();
-  drawHillLayer(0.22, 486, 34, '#8fd66d');
+  drawHillLayer(0.22, 486, 34, '#9be07f', '#5fae54');
   drawTreeLayer();
   drawBushLayer();
 }
 
 function cloud(x, y) {
+  ctx.fillStyle = 'rgba(190,215,235,0.55)';
+  ctx.beginPath();
+  ctx.arc(x, y + 4, 19, 0, Math.PI * 2);
+  ctx.arc(x + 22, y - 4, 23, 0, Math.PI * 2);
+  ctx.arc(x + 46, y + 4, 19, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.beginPath();
   ctx.arc(x, y, 20, 0, Math.PI * 2);
   ctx.arc(x + 22, y - 8, 24, 0, Math.PI * 2);
@@ -791,36 +861,55 @@ function cloud(x, y) {
   ctx.fill();
 }
 
-function drawHillLayer(parallax, baseY, amp, color) {
+function drawHillLayer(parallax, baseY, amp, colorTop, colorBottom) {
   const shift = camX * parallax;
-  ctx.fillStyle = color;
+  const step = 24;
+  const pts = [];
+  for (let x = 0; x <= W; x += step) {
+    pts.push([x, baseY - amp * (0.5 + 0.5 * Math.sin((x + shift) * 0.005))]);
+  }
+
+  const grad = ctx.createLinearGradient(0, baseY - amp, 0, H);
+  grad.addColorStop(0, colorTop);
+  grad.addColorStop(1, colorBottom);
+  ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.moveTo(0, H);
-  const step = 24;
-  for (let x = 0; x <= W; x += step) {
-    const y = baseY - amp * (0.5 + 0.5 * Math.sin((x + shift) * 0.005));
-    ctx.lineTo(x, y);
-  }
+  for (const [x, y] of pts) ctx.lineTo(x, y);
   ctx.lineTo(W, H);
   ctx.closePath();
   ctx.fill();
+
+  // sunlit ridge line along the crest
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+  ctx.stroke();
 }
 
 function drawTreeLayer() {
   const spacing = 220;
   for (let i = 0; i < 7; i++) {
     const tx = ((i * spacing - camX * 0.35) % (W + spacing) + (W + spacing)) % (W + spacing) - 60;
-    tree(tx, 478 + (i % 2) * 8);
+    tree(tx, 478 + (i % 2) * 8, i);
   }
 }
 
-function tree(x, groundY) {
-  ctx.fillStyle = '#5b3a29';
+function tree(x, groundY, seed) {
+  ctx.fillStyle = '#4a3020';
   ctx.fillRect(x - 3, groundY - 12, 6, 12);
-  ctx.fillStyle = '#2f7d3a';
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillRect(x, groundY - 12, 3, 12);
+
+  const hueShift = hash1(seed * 7 + 1) * 14 - 7;
   for (let i = 0; i < 3; i++) {
     const w = 32 - i * 7;
     const y = groundY - 12 - i * 13;
+    const grad = ctx.createLinearGradient(x - w / 2, y - 20, x + w / 2, y);
+    grad.addColorStop(0, `hsl(${128 + hueShift}, 45%, ${26 + i * 3}%)`);
+    grad.addColorStop(1, `hsl(${128 + hueShift}, 40%, ${38 + i * 3}%)`);
+    ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(x - w / 2, y);
     ctx.lineTo(x + w / 2, y);
@@ -839,13 +928,20 @@ function drawBushLayer() {
 }
 
 function bush(x, groundY) {
-  ctx.fillStyle = '#3a9450';
+  const grad = ctx.createRadialGradient(x - 4, groundY - 18, 2, x, groundY - 10, 20);
+  grad.addColorStop(0, '#5fc477');
+  grad.addColorStop(1, '#2f7a42');
+  ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.arc(x - 14, groundY - 8, 12, 0, Math.PI * 2);
   ctx.arc(x, groundY - 14, 15, 0, Math.PI * 2);
   ctx.arc(x + 14, groundY - 8, 12, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.arc(x + 8, groundY - 4, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
   ctx.beginPath();
   ctx.arc(x - 4, groundY - 18, 6, 0, Math.PI * 2);
   ctx.fill();
