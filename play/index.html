@@ -18,12 +18,24 @@
       <div id="score">⭐ <span id="score-val">0</span></div>
       <div id="lives">❤️ <span id="lives-val">3</span></div>
     </div>
+    <button id="pause-btn" aria-label="Пауза">⏸</button>
     <div id="offline-badge" class="hidden">Офлайн-режим</div>
+
+    <div id="touch-controls">
+      <button id="btn-left" class="touch-btn" aria-label="Влево">◀</button>
+      <button id="btn-right" class="touch-btn" aria-label="Вправо">▶</button>
+      <button id="btn-jump" class="touch-btn" aria-label="Прыжок">⤒</button>
+    </div>
 
     <div id="overlay" class="screen">
       <h1>Ball Quest</h1>
-      <p>Стрелки / A-D — катиться, Пробел / W / ↑ — прыжок</p>
+      <p>Стрелки / A-D — катиться, Пробел / W / ↑ — прыжок<br>(или кнопки на экране)</p>
       <button id="start-btn">Играть</button>
+    </div>
+
+    <div id="pause-screen" class="screen hidden">
+      <h1>Пауза</h1>
+      <button id="resume-btn">Продолжить</button>
     </div>
 
     <div id="win-screen" class="screen hidden">

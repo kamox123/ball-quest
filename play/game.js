@@ -14,6 +14,20 @@ const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
+function bindTouchButton(id, keyName) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const press = e => { e.preventDefault(); keys[keyName] = true; el.classList.add('active'); };
+  const release = e => { e.preventDefault(); keys[keyName] = false; el.classList.remove('active'); };
+  el.addEventListener('pointerdown', press);
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('pointerleave', release);
+}
+bindTouchButton('btn-left', 'ArrowLeft');
+bindTouchButton('btn-right', 'ArrowRight');
+bindTouchButton('btn-jump', 'Space');
+
 function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
@@ -287,20 +301,41 @@ class Player {
     const px = this.x - camX;
     ctx.save();
     ctx.translate(px, this.y);
+
+    ctx.save();
     ctx.rotate(this.angle);
     const grad = ctx.createRadialGradient(-6, -6, 4, 0, 0, this.r);
-    grad.addColorStop(0, '#ff8080');
-    grad.addColorStop(1, '#d92626');
+    grad.addColorStop(0, '#ff9d9d');
+    grad.addColorStop(1, '#c92626');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(0, 0, this.r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#8a0000';
+    ctx.strokeStyle = 'rgba(138,0,0,0.55)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(-this.r, 0); ctx.lineTo(this.r, 0);
-    ctx.moveTo(0, -this.r); ctx.lineTo(0, this.r);
     ctx.stroke();
+    ctx.restore();
+
+    // friendly face, stays upright while the body rolls
+    ctx.fillStyle = '#2a0808';
+    ctx.beginPath();
+    ctx.ellipse(-6, -4, 3, 3.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(6, -4, 3, 3.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-5.3, -5.6, 1, 0, Math.PI * 2);
+    ctx.arc(6.7, -5.6, 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#2a0808';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, 1, 7, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+
     ctx.restore();
   }
 }
@@ -513,6 +548,20 @@ document.getElementById('start-btn').onclick = () => startGame();
 document.getElementById('restart-btn').onclick = () => startGame();
 document.getElementById('retry-btn').onclick = () => startGame();
 
+const pauseScreen = document.getElementById('pause-screen');
+document.getElementById('pause-btn').onclick = () => {
+  if (state === 'playing') {
+    state = 'paused';
+    pauseScreen.classList.remove('hidden');
+  }
+};
+document.getElementById('resume-btn').onclick = () => {
+  if (state === 'paused') {
+    state = 'playing';
+    pauseScreen.classList.add('hidden');
+  }
+};
+
 function loadLevel(idx) {
   levelIndex = idx;
   level = LEVEL_BUILDERS[levelIndex]();
@@ -529,6 +578,7 @@ function startGame() {
   overlay.classList.add('hidden');
   winScreen.classList.add('hidden');
   loseScreen.classList.add('hidden');
+  pauseScreen.classList.add('hidden');
 }
 
 function updateHud() {
@@ -552,16 +602,29 @@ function respawn() {
 
 function drawBackground() {
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#87ceeb');
-  grad.addColorStop(1, '#c9f0ff');
+  grad.addColorStop(0, '#6ec6ff');
+  grad.addColorStop(0.6, '#9fdcff');
+  grad.addColorStop(1, '#e3f7ff');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  const sunGlow = ctx.createRadialGradient(800, 120, 10, 800, 120, 100);
+  sunGlow.addColorStop(0, 'rgba(255,250,220,0.9)');
+  sunGlow.addColorStop(1, 'rgba(255,250,220,0)');
+  ctx.fillStyle = sunGlow;
+  ctx.beginPath(); ctx.arc(800, 120, 100, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff8d6';
+  ctx.beginPath(); ctx.arc(800, 120, 40, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
   for (let i = 0; i < 5; i++) {
-    const cx = ((i * 400 - camX * 0.3) % (W + 400) + (W + 400)) % (W + 400) - 100;
+    const cx = ((i * 400 - camX * 0.25) % (W + 400) + (W + 400)) % (W + 400) - 100;
     cloud(cx, 60 + (i % 3) * 40);
   }
+
+  drawHillLayer(0.12, 480, 44, '#c3eca1');
+  drawHillLayer(0.22, 486, 34, '#8fd66d');
+  drawTreeLayer();
 }
 
 function cloud(x, y) {
@@ -570,6 +633,45 @@ function cloud(x, y) {
   ctx.arc(x + 22, y - 8, 24, 0, Math.PI * 2);
   ctx.arc(x + 46, y, 20, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawHillLayer(parallax, baseY, amp, color) {
+  const shift = camX * parallax;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  const step = 24;
+  for (let x = 0; x <= W; x += step) {
+    const y = baseY - amp * (0.5 + 0.5 * Math.sin((x + shift) * 0.005));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawTreeLayer() {
+  const spacing = 220;
+  for (let i = 0; i < 7; i++) {
+    const tx = ((i * spacing - camX * 0.35) % (W + spacing) + (W + spacing)) % (W + spacing) - 60;
+    tree(tx, 478 + (i % 2) * 8);
+  }
+}
+
+function tree(x, groundY) {
+  ctx.fillStyle = '#5b3a29';
+  ctx.fillRect(x - 3, groundY - 12, 6, 12);
+  ctx.fillStyle = '#2f7d3a';
+  for (let i = 0; i < 3; i++) {
+    const w = 32 - i * 7;
+    const y = groundY - 12 - i * 13;
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, y);
+    ctx.lineTo(x + w / 2, y);
+    ctx.lineTo(x, y - 20);
+    ctx.closePath();
+    ctx.fill();
+  }
 }
 
 let lastTime = performance.now();
