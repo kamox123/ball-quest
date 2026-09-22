@@ -77,6 +77,26 @@ canvas {
 
 #pause-btn:hover { background: rgba(0, 0, 0, 0.45); }
 
+#mute-btn {
+  position: absolute;
+  top: 108px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#mute-btn:hover { background: rgba(0, 0, 0, 0.45); }
+
 #touch-controls {
   position: absolute;
   inset: 0;

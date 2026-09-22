@@ -32,6 +32,143 @@ function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+// --- Audio: everything is synthesized with Web Audio oscillators/noise, so
+// there are no sound-file assets to ship or load (keeps the offline PWA and
+// APK small and avoids extra network/cache requests).
+let audioCtx = null;
+let sfxGain = null;
+let musicGain = null;
+let muted = localStorage.getItem('bq_muted') === '1';
+
+function ensureAudio() {
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  audioCtx = new Ctx();
+  sfxGain = audioCtx.createGain();
+  sfxGain.gain.value = muted ? 0 : 0.4;
+  sfxGain.connect(audioCtx.destination);
+  musicGain = audioCtx.createGain();
+  musicGain.gain.value = muted ? 0 : 0.15;
+  musicGain.connect(audioCtx.destination);
+}
+
+function setMuted(next) {
+  muted = next;
+  localStorage.setItem('bq_muted', muted ? '1' : '0');
+  if (sfxGain) sfxGain.gain.value = muted ? 0 : 0.4;
+  if (musicGain) musicGain.gain.value = muted ? 0 : 0.15;
+  const btn = document.getElementById('mute-btn');
+  if (btn) btn.textContent = muted ? '🔇' : '🔊';
+}
+
+function tone(freq, duration, type, when, peak, dest) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime + when);
+  g.gain.setValueAtTime(0.0001, audioCtx.currentTime + when);
+  g.gain.linearRampToValueAtTime(peak, audioCtx.currentTime + when + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + when + duration);
+  osc.connect(g);
+  g.connect(dest || sfxGain);
+  osc.start(audioCtx.currentTime + when);
+  osc.stop(audioCtx.currentTime + when + duration + 0.03);
+}
+
+function sweep(freqFrom, freqTo, duration, type, peak) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freqFrom, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqTo), audioCtx.currentTime + duration);
+  g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(peak, audioCtx.currentTime + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+  osc.connect(g);
+  g.connect(sfxGain);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + duration + 0.03);
+}
+
+function noiseThud(duration, filterFreq, peak) {
+  if (!audioCtx) return;
+  const bufSize = Math.floor(audioCtx.sampleRate * duration);
+  const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = filterFreq;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(peak, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(sfxGain);
+  src.start();
+}
+
+const sfx = {
+  jump() { ensureAudio(); sweep(340, 680, 0.14, 'triangle', 0.35); },
+  star() {
+    ensureAudio();
+    tone(880, 0.1, 'sine', 0, 0.3);
+    tone(1318.5, 0.16, 'sine', 0.06, 0.28);
+  },
+  stomp() {
+    ensureAudio();
+    noiseThud(0.12, 900, 0.3);
+    sweep(220, 80, 0.1, 'sine', 0.25);
+  },
+  hurt() { ensureAudio(); sweep(340, 110, 0.28, 'sawtooth', 0.3); },
+  gameOver() {
+    ensureAudio();
+    tone(330, 0.22, 'triangle', 0, 0.3);
+    tone(262, 0.22, 'triangle', 0.2, 0.3);
+    tone(196, 0.4, 'triangle', 0.4, 0.3);
+  },
+  levelComplete() {
+    ensureAudio();
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.22, 'triangle', i * 0.09, 0.3));
+  },
+  win() {
+    ensureAudio();
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, 0.3, 'triangle', i * 0.1, 0.32));
+  },
+  click() { ensureAudio(); tone(720, 0.05, 'square', 0, 0.15); },
+};
+
+const MUSIC_NOTES = [261.63, 329.63, 392.0, 329.63, 293.66, 349.23, 392.0, 440.0];
+let musicTimer = null;
+let musicStep = 0;
+
+function musicTick() {
+  if (!audioCtx || muted) return;
+  const freq = MUSIC_NOTES[musicStep % MUSIC_NOTES.length];
+  tone(freq, 0.34, 'sine', 0, 0.16, musicGain);
+  tone(freq / 2, 0.34, 'sine', 0, 0.07, musicGain);
+  musicStep++;
+}
+
+function startMusic() {
+  ensureAudio();
+  if (musicTimer) return;
+  musicTick();
+  musicTimer = setInterval(musicTick, 380);
+}
+
+function stopMusic() {
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+}
+
 function hash1(n) {
   const s = Math.sin(n * 12.9898) * 43758.5453;
   return s - Math.floor(s);
@@ -506,6 +643,7 @@ class Player {
       this.vy = -JUMP_SPEED;
       this.onGround = false;
       this.standingPlatform = null;
+      sfx.jump();
     }
 
     this.vy += GRAVITY * dt;
@@ -833,23 +971,33 @@ const scoreVal = document.getElementById('score-val');
 const heartIcons = Array.from(document.querySelectorAll('.heart-icon'));
 const levelVal = document.getElementById('level-val');
 
-document.getElementById('start-btn').onclick = () => startGame();
-document.getElementById('restart-btn').onclick = () => startGame();
-document.getElementById('retry-btn').onclick = () => startGame();
+document.getElementById('start-btn').onclick = () => { sfx.click(); startGame(); };
+document.getElementById('restart-btn').onclick = () => { sfx.click(); startGame(); };
+document.getElementById('retry-btn').onclick = () => { sfx.click(); startGame(); };
 
 const pauseScreen = document.getElementById('pause-screen');
 document.getElementById('pause-btn').onclick = () => {
+  sfx.click();
   if (state === 'playing') {
     state = 'paused';
+    stopMusic();
     pauseScreen.classList.remove('hidden');
   }
 };
 document.getElementById('resume-btn').onclick = () => {
+  sfx.click();
   if (state === 'paused') {
     state = 'playing';
+    startMusic();
     pauseScreen.classList.add('hidden');
   }
 };
+
+const muteBtn = document.getElementById('mute-btn');
+if (muteBtn) {
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+  muteBtn.onclick = () => setMuted(!muted);
+}
 
 function loadLevel(idx) {
   levelIndex = idx;
@@ -868,6 +1016,8 @@ function startGame() {
   winScreen.classList.add('hidden');
   loseScreen.classList.add('hidden');
   pauseScreen.classList.add('hidden');
+  musicStep = 0;
+  startMusic();
 }
 
 function updateHud() {
@@ -881,10 +1031,13 @@ function respawn() {
   updateHud();
   if (lives <= 0) {
     state = 'lose';
+    stopMusic();
+    sfx.gameOver();
     document.getElementById('lose-score').textContent = `Уровень ${levelIndex + 1}, звёзд собрано: ${score}`;
     loseScreen.classList.remove('hidden');
     return;
   }
+  sfx.hurt();
   player.x = level.start.x; player.y = level.start.y;
   player.vx = 0; player.vy = 0;
 }
@@ -1158,6 +1311,8 @@ function updateTransition(dt) {
       state = 'playing';
     } else {
       state = 'win';
+      stopMusic();
+      sfx.win();
       document.getElementById('win-score').textContent = `Все уровни пройдены! Звёзд собрано: ${score}`;
       winScreen.classList.remove('hidden');
     }
@@ -1187,6 +1342,7 @@ function update(dt) {
       s.collected = true;
       score += 1;
       updateHud();
+      sfx.star();
     }
   }
 
@@ -1202,6 +1358,7 @@ function update(dt) {
         player.vy = -JUMP_SPEED * 0.6;
         score += 2;
         updateHud();
+        sfx.stomp();
       } else {
         respawn();
         return;
@@ -1212,6 +1369,7 @@ function update(dt) {
   if (rectsOverlap(player.bounds(), level.flag.bounds())) {
     state = 'transition';
     transitionTimer = 0.01;
+    sfx.levelComplete();
   }
 
   camX = Math.max(0, Math.min(player.x - W / 2, level.levelWidth - W));
