@@ -37,7 +37,7 @@ function hash1(n) {
   return s - Math.floor(s);
 }
 
-function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
+function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
   const dirtGrad = ctx.createLinearGradient(x, y, x, y + h);
   dirtGrad.addColorStop(0, dirtColor);
   dirtGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
@@ -46,11 +46,12 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
   ctx.fillStyle = dirtGrad;
   ctx.fillRect(x, y, w, h);
 
-  // pebbles with a light/dark pair for a bit of relief
+  // pebbles with a light/dark pair for a bit of relief - seeded by the
+  // platform's own stable identity, never by its on-screen position, so
+  // the pattern doesn't reshuffle every frame as the camera scrolls
   for (let sx = 6; sx < w - 4; sx += 17) {
-    const seed = x + sx;
     const sy = 14 + ((sx * 7) % Math.max(6, h - 18));
-    const r = 1.6 + hash1(seed) * 1.2;
+    const r = 1.6 + hash1(seed + sx) * 1.2;
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.beginPath();
     ctx.arc(x + sx, y + sy + 0.8, r, 0, Math.PI * 2);
@@ -61,13 +62,13 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
     ctx.fill();
   }
 
-  // irregular jagged grass silhouette (deterministic per x so it doesn't flicker)
+  // irregular jagged grass silhouette, seeded per tooth index (stable)
   const teeth = Math.max(3, Math.round(w / 11));
   const tw = w / teeth;
   const topPts = [];
   for (let i = 0; i <= teeth; i++) {
     const gx = x + i * tw;
-    const jag = i % 2 === 0 ? 11 + hash1(x + i) * 4 : 1 + hash1(x + i + 99) * 3;
+    const jag = i % 2 === 0 ? 11 + hash1(seed + i) * 4 : 1 + hash1(seed + i + 99) * 3;
     topPts.push([gx, y + jag]);
   }
 
@@ -87,9 +88,9 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
   ctx.lineWidth = 1;
   for (let i = 0; i < topPts.length - 1; i++) {
     const [gx, gy] = topPts[i];
-    if (hash1(gx) < 0.55) continue;
-    const bh = 3 + hash1(gx + 5) * 4;
-    const lean = (hash1(gx + 11) - 0.5) * 3;
+    if (hash1(seed + i * 3) < 0.55) continue;
+    const bh = 3 + hash1(seed + i * 3 + 5) * 4;
+    const lean = (hash1(seed + i * 3 + 11) - 0.5) * 3;
     ctx.beginPath();
     ctx.moveTo(gx, gy);
     ctx.lineTo(gx + lean, gy - bh);
@@ -103,9 +104,10 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
 class Platform {
   constructor(x, y, w, h) {
     this.x = x; this.y = y; this.w = w; this.h = h;
+    this.seed = x * 3.17 + y * 7.91; // fixed for life, never derived from on-screen position
   }
   draw(camX) {
-    drawGroundBlock(this.x - camX, this.y, this.w, this.h, '#6b4226', '#4fc76a');
+    drawGroundBlock(this.x - camX, this.y, this.w, this.h, '#6b4226', '#4fc76a', this.seed);
   }
 }
 
@@ -134,7 +136,7 @@ class MovingPlatform extends Platform {
     this.dy = this.y - prevY;
   }
   draw(camX) {
-    drawGroundBlock(this.x - camX, this.y, this.w, this.h, '#334469', '#6fa8ff');
+    drawGroundBlock(this.x - camX, this.y, this.w, this.h, '#334469', '#6fa8ff', this.seed);
   }
 }
 
@@ -149,41 +151,65 @@ class Spike {
     const sx = this.x - camX;
     const teeth = Math.max(1, Math.round(this.w / 18));
     const tw = this.w / teeth;
+    const baseH = 7;
+    const baseY = this.y + this.h - baseH;
 
-    // dark socket the teeth root into
-    ctx.fillStyle = '#3a3a3f';
-    ctx.fillRect(sx, this.y + this.h - 6, this.w, 6);
+    // dark metal base plate with a yellow/black hazard stripe
+    ctx.fillStyle = '#26262b';
+    ctx.fillRect(sx, baseY, this.w, baseH);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx, baseY + 1, this.w, 3);
+    ctx.clip();
+    ctx.fillStyle = '#2a2a2e';
+    ctx.fillRect(sx, baseY + 1, this.w, 3);
+    ctx.fillStyle = '#f4c430';
+    for (let sxp = -6; sxp < this.w + 6; sxp += 10) {
+      ctx.beginPath();
+      ctx.moveTo(sx + sxp, baseY + 5);
+      ctx.lineTo(sx + sxp + 4, baseY);
+      ctx.lineTo(sx + sxp + 7, baseY);
+      ctx.lineTo(sx + sxp + 3, baseY + 5);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
 
     for (let i = 0; i < teeth; i++) {
       const bx = sx + i * tw;
       const tipX = bx + tw / 2;
-      const grad = ctx.createLinearGradient(bx, this.y, bx + tw, this.y);
-      grad.addColorStop(0, '#8a8f99');
-      grad.addColorStop(0.5, '#eef1f5');
-      grad.addColorStop(1, '#7d838d');
-      ctx.fillStyle = grad;
+      const tipY = this.y;
+
+      // faceted steel tooth: lit left face, shaded right face, bold outline
+      ctx.fillStyle = '#d7dee6';
       ctx.beginPath();
-      ctx.moveTo(bx, this.y + this.h);
-      ctx.lineTo(tipX, this.y);
-      ctx.lineTo(bx + tw, this.y + this.h);
+      ctx.moveTo(bx + 1, baseY);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(tipX, baseY);
       ctx.closePath();
       ctx.fill();
 
-      // bright edge highlight down the left face for a metallic look
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = 1;
+      ctx.fillStyle = '#8b93a1';
       ctx.beginPath();
-      ctx.moveTo(bx + tw * 0.15, this.y + this.h * 0.85);
-      ctx.lineTo(tipX, this.y + 2);
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(bx + tw - 1, baseY);
+      ctx.lineTo(tipX, baseY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = '#2a2a2e';
+      ctx.lineWidth = 1.4;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(bx + 1, baseY);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(bx + tw - 1, baseY);
       ctx.stroke();
 
-      // dried-blood-red tip glint for menace
-      ctx.fillStyle = 'rgba(180,20,20,0.55)';
+      // tiny glint near the tip
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.beginPath();
-      ctx.moveTo(tipX, this.y);
-      ctx.lineTo(tipX - 2, this.y + 7);
-      ctx.lineTo(tipX + 2, this.y + 7);
-      ctx.closePath();
+      ctx.arc(tipX - 1, tipY + 5, 1, 0, Math.PI * 2);
       ctx.fill();
     }
   }
