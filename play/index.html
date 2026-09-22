@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ball Quest</title>
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game" width="960" height="540"></canvas>
+
+    <div id="hud">
+      <div id="level">🏁 <span id="level-val">1/6</span></div>
+      <div id="score">⭐ <span id="score-val">0</span></div>
+      <div id="lives">❤️ <span id="lives-val">3</span></div>
+    </div>
+    <div id="offline-badge" class="hidden">Офлайн-режим</div>
+
+    <div id="overlay" class="screen">
+      <h1>Ball Quest</h1>
+      <p>Стрелки / A-D — катиться, Пробел / W / ↑ — прыжок</p>
+      <button id="start-btn">Играть</button>
+    </div>
+
+    <div id="win-screen" class="screen hidden">
+      <h1>Уровень пройден!</h1>
+      <p id="win-score"></p>
+      <button id="restart-btn">Играть снова</button>
+    </div>
+
+    <div id="lose-screen" class="screen hidden">
+      <h1>Игра окончена</h1>
+      <p id="lose-score"></p>
+      <button id="retry-btn">Попробовать снова</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+  <script src="sw-register.js"></script>
+</body>
+</html>

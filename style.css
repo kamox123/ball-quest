@@ -1,0 +1,172 @@
+:root {
+  --bg: #1a1a2e;
+  --bg-alt: #22223a;
+  --accent: #ff4d4d;
+  --accent-2: #3fae4a;
+  --text: #f2f2f7;
+  --text-dim: #b8b8c8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.hero {
+  text-align: center;
+  padding: 64px 20px 48px;
+  background: radial-gradient(circle at 50% 0%, #2a2a4a 0%, var(--bg) 70%);
+}
+
+.hero-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.hero h1 {
+  font-size: 44px;
+  margin: 20px 0 8px;
+}
+
+.tagline {
+  color: var(--text-dim);
+  font-size: 18px;
+  max-width: 480px;
+  margin: 0 auto 28px;
+}
+
+.cta-row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-block;
+  padding: 14px 26px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 16px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(255,77,77,0.35);
+}
+
+.btn-secondary {
+  background: var(--accent-2);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(63,174,74,0.35);
+}
+
+.hint {
+  margin-top: 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+.screenshot-wrap {
+  display: flex;
+  justify-content: center;
+  margin: -16px 0 56px;
+}
+
+.screenshot {
+  width: 100%;
+  max-width: 800px;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 56px;
+}
+
+.feature {
+  background: var(--bg-alt);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.feature-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.feature h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.feature p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.install-guide, .controls-guide {
+  background: var(--bg-alt);
+  border-radius: 12px;
+  padding: 28px 32px;
+  margin-bottom: 24px;
+}
+
+.install-guide h2, .controls-guide h2 {
+  margin-top: 0;
+  font-size: 22px;
+}
+
+.install-guide ol {
+  color: var(--text-dim);
+  padding-left: 20px;
+}
+
+.install-guide li {
+  margin-bottom: 8px;
+}
+
+.install-guide code {
+  background: rgba(255,255,255,0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.controls-guide p {
+  color: var(--text-dim);
+  margin: 0;
+}
+
+footer {
+  text-align: center;
+  padding: 28px 20px 40px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
