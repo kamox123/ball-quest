@@ -37,6 +37,16 @@ function hash1(n) {
   return s - Math.floor(s);
 }
 
+function drawGrassBlade(x, y, h, lean, width, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x - width / 2, y);
+  ctx.quadraticCurveTo(x + lean * 0.55, y - h * 0.6, x + lean, y - h);
+  ctx.quadraticCurveTo(x + lean * 0.55, y - h * 0.6, x + width / 2, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
   const dirtGrad = ctx.createLinearGradient(x, y, x, y + h);
   dirtGrad.addColorStop(0, dirtColor);
@@ -62,43 +72,84 @@ function drawGroundBlock(x, y, w, h, dirtColor, grassColor, seed) {
     ctx.fill();
   }
 
-  // irregular jagged grass silhouette, seeded per tooth index (stable)
-  const teeth = Math.max(3, Math.round(w / 11));
+  // smooth, rolling grass ridge silhouette (organic curve, not jagged teeth),
+  // seeded per point index (stable)
+  const teeth = Math.max(4, Math.round(w / 9));
   const tw = w / teeth;
   const topPts = [];
   for (let i = 0; i <= teeth; i++) {
     const gx = x + i * tw;
-    const jag = i % 2 === 0 ? 11 + hash1(seed + i) * 4 : 1 + hash1(seed + i + 99) * 3;
+    const n = hash1(seed + i * 0.63);
+    const jag = 7 + n * 9 + Math.sin(i * 0.85 + seed) * 2.5;
     topPts.push([gx, y + jag]);
   }
 
-  const grassGrad = ctx.createLinearGradient(x, y, x, y + 14);
-  grassGrad.addColorStop(0, '#8fe07a');
+  const grassGrad = ctx.createLinearGradient(x, y, x, y + 16);
+  grassGrad.addColorStop(0, '#9beb6f');
+  grassGrad.addColorStop(0.55, '#57c750');
   grassGrad.addColorStop(1, grassColor);
   ctx.fillStyle = grassGrad;
   ctx.beginPath();
-  ctx.moveTo(x, y + 14);
-  for (const [gx, gy] of topPts) ctx.lineTo(gx, gy);
-  ctx.lineTo(x + w, y + 14);
+  ctx.moveTo(x, y + 16);
+  ctx.lineTo(topPts[0][0], topPts[0][1]);
+  for (let i = 1; i < topPts.length; i++) {
+    const [px, py] = topPts[i - 1];
+    const [cx, cy] = topPts[i];
+    ctx.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
+  }
+  ctx.lineTo(topPts[topPts.length - 1][0], topPts[topPts.length - 1][1]);
+  ctx.lineTo(x + w, y + 16);
   ctx.closePath();
   ctx.fill();
 
-  // individual grass blades poking up from the ridge
-  ctx.strokeStyle = 'rgba(60,150,70,0.65)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < topPts.length - 1; i++) {
-    const [gx, gy] = topPts[i];
-    if (hash1(seed + i * 3) < 0.55) continue;
-    const bh = 3 + hash1(seed + i * 3 + 5) * 4;
-    const lean = (hash1(seed + i * 3 + 11) - 0.5) * 3;
-    ctx.beginPath();
-    ctx.moveTo(gx, gy);
-    ctx.lineTo(gx + lean, gy - bh);
-    ctx.stroke();
+  // soft rim light tracing the curved ridge
+  ctx.strokeStyle = 'rgba(220,255,190,0.5)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(topPts[0][0], topPts[0][1]);
+  for (let i = 1; i < topPts.length; i++) {
+    const [px, py] = topPts[i - 1];
+    const [cx, cy] = topPts[i];
+    ctx.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
+  }
+  ctx.stroke();
+
+  // back layer: short, dense, shaded blades for depth
+  const density = teeth * 2;
+  for (let i = 0; i <= density; i++) {
+    const t = i / density;
+    const gx = x + t * w;
+    const gy = topPts[Math.min(topPts.length - 1, Math.floor(t * teeth))][1];
+    if (hash1(seed + i * 1.7 + 200) < 0.4) continue;
+    const bh = 3 + hash1(seed + i * 1.7 + 210) * 3;
+    const lean = (hash1(seed + i * 1.7 + 220) - 0.5) * 3;
+    const hue = 100 + hash1(seed + i * 1.7 + 230) * 18;
+    drawGrassBlade(gx, gy + 2, bh, lean, 1.6, `hsl(${hue},42%,26%)`);
   }
 
-  ctx.fillStyle = 'rgba(255,255,255,0.16)';
-  ctx.fillRect(x, y + 13, w, 1.5);
+  // front layer: taller, brighter, varied blades poking above the ridge
+  for (let i = 0; i <= density; i++) {
+    const t = i / density;
+    const gx = x + t * w + (hash1(seed + i * 2.3) - 0.5) * 3;
+    const gy = topPts[Math.min(topPts.length - 1, Math.floor(t * teeth))][1];
+    if (hash1(seed + i * 2.3 + 300) < 0.42) continue;
+    const bh = 5 + hash1(seed + i * 2.3 + 310) * 7;
+    const lean = (hash1(seed + i * 2.3 + 320) - 0.5) * 6;
+    const hue = 92 + hash1(seed + i * 2.3 + 330) * 32;
+    const light = 40 + hash1(seed + i * 2.3 + 340) * 18;
+    drawGrassBlade(gx, gy, bh, lean, 2.2, `hsl(${hue},55%,${light}%)`);
+  }
+
+  // rare tiny wildflowers for extra life
+  for (let i = 0; i < teeth; i++) {
+    if (hash1(seed + i * 5.1 + 400) <= 0.92) continue;
+    const gx = x + (i + 0.5) * tw;
+    const gy = topPts[i][1] - 2;
+    ctx.fillStyle = hash1(seed + i * 5.1 + 410) > 0.5 ? '#fff7cc' : '#ffe27a';
+    ctx.beginPath();
+    ctx.arc(gx, gy, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 class Platform {
