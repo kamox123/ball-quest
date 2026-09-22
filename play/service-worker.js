@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ball-quest-v1';
+const CACHE_VERSION = 'ball-quest-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -24,23 +24,26 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Network-first: while online, always serve the latest files (and refresh
+// the cache with them). Only fall back to the cached copy when the network
+// request fails, so offline play still works.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then(response => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => {
+    fetch(event.request)
+      .then(response => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_VERSION).then(cache => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request).then(cached => {
+          if (cached) return cached;
           if (event.request.mode === 'navigate') return caches.match('./index.html');
-        });
-    })
+        })
+      )
   );
 });
