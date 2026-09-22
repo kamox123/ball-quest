@@ -32,15 +32,43 @@ function rectsOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+function drawGroundBlock(x, y, w, h, dirtColor, grassColor) {
+  ctx.fillStyle = dirtColor;
+  ctx.fillRect(x, y, w, h);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for (let sx = 6; sx < w - 4; sx += 17) {
+    const sy = 10 + ((sx * 7) % (h - 14));
+    ctx.beginPath();
+    ctx.arc(x + sx, y + sy, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const teeth = Math.max(2, Math.round(w / 13));
+  const tw = w / teeth;
+  ctx.fillStyle = grassColor;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 12);
+  for (let i = 0; i <= teeth; i++) {
+    const gx = x + i * tw;
+    const gy = y + (i % 2 === 0 ? 12 : 1);
+    ctx.lineTo(gx, gy);
+  }
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(x, y + 12, w, 2);
+}
+
 class Platform {
   constructor(x, y, w, h) {
     this.x = x; this.y = y; this.w = w; this.h = h;
   }
   draw(camX) {
-    ctx.fillStyle = '#5b3a29';
-    ctx.fillRect(this.x - camX, this.y, this.w, this.h);
-    ctx.fillStyle = '#3fae4a';
-    ctx.fillRect(this.x - camX, this.y, this.w, 10);
+    drawGroundBlock(this.x - camX, this.y, this.w, this.h, '#6b4226', '#4fc76a');
   }
 }
 
@@ -69,10 +97,7 @@ class MovingPlatform extends Platform {
     this.dy = this.y - prevY;
   }
   draw(camX) {
-    ctx.fillStyle = '#3a4a6b';
-    ctx.fillRect(this.x - camX, this.y, this.w, this.h);
-    ctx.fillStyle = '#6fa8ff';
-    ctx.fillRect(this.x - camX, this.y, this.w, 10);
+    drawGroundBlock(this.x - camX, this.y, this.w, this.h, '#334469', '#6fa8ff');
   }
 }
 
@@ -304,9 +329,10 @@ class Player {
 
     ctx.save();
     ctx.rotate(this.angle);
-    const grad = ctx.createRadialGradient(-6, -6, 4, 0, 0, this.r);
-    grad.addColorStop(0, '#ff9d9d');
-    grad.addColorStop(1, '#c92626');
+    const grad = ctx.createRadialGradient(-7, -8, 3, 1, 2, this.r * 1.15);
+    grad.addColorStop(0, '#ffb3b3');
+    grad.addColorStop(0.55, '#f13a3a');
+    grad.addColorStop(1, '#a81616');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(0, 0, this.r, 0, Math.PI * 2);
@@ -316,6 +342,11 @@ class Player {
     ctx.beginPath();
     ctx.moveTo(-this.r, 0); ctx.lineTo(this.r, 0);
     ctx.stroke();
+    // specular highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-7, -8, 5, 3, -0.5, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
 
     // friendly face, stays upright while the body rolls
@@ -541,7 +572,7 @@ const overlay = document.getElementById('overlay');
 const winScreen = document.getElementById('win-screen');
 const loseScreen = document.getElementById('lose-screen');
 const scoreVal = document.getElementById('score-val');
-const livesVal = document.getElementById('lives-val');
+const heartIcons = Array.from(document.querySelectorAll('.heart-icon'));
 const levelVal = document.getElementById('level-val');
 
 document.getElementById('start-btn').onclick = () => startGame();
@@ -583,7 +614,7 @@ function startGame() {
 
 function updateHud() {
   scoreVal.textContent = score;
-  livesVal.textContent = lives;
+  heartIcons.forEach((el, i) => el.classList.toggle('lost', i >= lives));
   levelVal.textContent = `${levelIndex + 1}/${LEVEL_BUILDERS.length}`;
 }
 
@@ -623,8 +654,10 @@ function drawBackground() {
   }
 
   drawHillLayer(0.12, 480, 44, '#c3eca1');
+  drawHut();
   drawHillLayer(0.22, 486, 34, '#8fd66d');
   drawTreeLayer();
+  drawBushLayer();
 }
 
 function cloud(x, y) {
@@ -672,6 +705,44 @@ function tree(x, groundY) {
     ctx.closePath();
     ctx.fill();
   }
+}
+
+function drawBushLayer() {
+  const spacing = 300;
+  for (let i = 0; i < 5; i++) {
+    const bx = ((i * spacing - camX * 0.3) % (W + spacing) + (W + spacing)) % (W + spacing) - 80;
+    bush(bx, 480 + (i % 2) * 6);
+  }
+}
+
+function bush(x, groundY) {
+  ctx.fillStyle = '#3a9450';
+  ctx.beginPath();
+  ctx.arc(x - 14, groundY - 8, 12, 0, Math.PI * 2);
+  ctx.arc(x, groundY - 14, 15, 0, Math.PI * 2);
+  ctx.arc(x + 14, groundY - 8, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.arc(x - 4, groundY - 18, 6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawHut() {
+  const hx = 1550 - camX * 0.12;
+  if (hx < -120 || hx > W + 120) return;
+  const gy = 462;
+  ctx.fillStyle = '#c9a267';
+  ctx.fillRect(hx - 22, gy - 34, 44, 34);
+  ctx.fillStyle = '#8a5a3b';
+  ctx.beginPath();
+  ctx.moveTo(hx - 28, gy - 34);
+  ctx.lineTo(hx + 28, gy - 34);
+  ctx.lineTo(hx, gy - 58);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#6b3f24';
+  ctx.fillRect(hx - 7, gy - 20, 14, 20);
 }
 
 let lastTime = performance.now();

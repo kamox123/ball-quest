@@ -48,6 +48,15 @@ canvas {
   backdrop-filter: blur(2px);
 }
 
+.heart-icon {
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+.heart-icon.lost {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
 #pause-btn {
   position: absolute;
   top: 60px;
