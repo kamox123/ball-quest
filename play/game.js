@@ -163,21 +163,96 @@ class Enemy {
     this.startX = x; this.range = range;
     this.dir = 1; this.speed = 90;
     this.alive = true;
+    this.bounds_ = null; // resolved lazily against the platform it stands on
+    this.walkPhase = Math.random() * Math.PI * 2;
+    this.deathTimer = 0;
   }
-  update(dt) {
-    if (!this.alive) return;
+  resolveBounds(platforms) {
+    const half = this.size / 2;
+    const ground = platforms.find(p =>
+      this.startX >= p.x && this.startX <= p.x + p.w && Math.abs(this.y - p.y) < 4
+    );
+    const platMin = ground ? ground.x + half : -Infinity;
+    const platMax = ground ? ground.x + ground.w - half : Infinity;
+    this.bounds_ = {
+      min: Math.max(platMin, this.startX - this.range),
+      max: Math.min(platMax, this.startX + this.range),
+    };
+  }
+  update(dt, platforms) {
+    if (!this.alive) {
+      if (this.deathTimer > 0) this.deathTimer -= dt;
+      return;
+    }
+    if (!this.bounds_) this.resolveBounds(platforms);
     this.x += this.dir * this.speed * dt;
-    if (this.x > this.startX + this.range) this.dir = -1;
-    if (this.x < this.startX - this.range) this.dir = 1;
+    if (this.x > this.bounds_.max) { this.x = this.bounds_.max; this.dir = -1; }
+    if (this.x < this.bounds_.min) { this.x = this.bounds_.min; this.dir = 1; }
+    this.walkPhase += dt * 9;
+  }
+  kill() {
+    this.alive = false;
+    this.deathTimer = 0.28;
   }
   draw(camX) {
-    if (!this.alive) return;
-    ctx.fillStyle = '#222';
-    ctx.fillRect(this.x - camX, this.y - this.size, this.size, this.size);
-    ctx.fillStyle = '#ff3b3b';
+    if (!this.alive && this.deathTimer <= 0) return;
     const ex = this.x - camX;
-    ctx.fillRect(ex + this.size * 0.2, this.y - this.size * 0.7, this.size * 0.15, this.size * 0.15);
-    ctx.fillRect(ex + this.size * 0.65, this.y - this.size * 0.7, this.size * 0.15, this.size * 0.15);
+    const s = this.size;
+
+    if (!this.alive) {
+      // quick squash-and-fade death animation
+      const t = 1 - Math.max(0, this.deathTimer) / 0.28;
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      ctx.translate(ex + s / 2, this.y - s * (1 - t) * 0.5);
+      ctx.scale(1 + t * 0.6, 1 - t * 0.85);
+      this.drawBody(-s / 2, -s, s, 0);
+      ctx.restore();
+      return;
+    }
+
+    const legLift = Math.sin(this.walkPhase) * 3;
+    const legLift2 = Math.sin(this.walkPhase + Math.PI) * 3;
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(ex + s * 0.15, this.y + Math.max(0, legLift), s * 0.2, 5 - Math.max(0, legLift));
+    ctx.fillRect(ex + s * 0.65, this.y + Math.max(0, legLift2), s * 0.2, 5 - Math.max(0, legLift2));
+
+    const bob = Math.sin(this.walkPhase * 2) * 1.5;
+    this.drawBody(ex, this.y - s + bob, s, bob);
+  }
+  drawBody(ex, topY, s, bob) {
+    const grad = ctx.createLinearGradient(ex, topY, ex, topY + s);
+    grad.addColorStop(0, '#3a3a42');
+    grad.addColorStop(1, '#111114');
+    ctx.fillStyle = grad;
+    const r = s * 0.18;
+    ctx.beginPath();
+    ctx.moveTo(ex + r, topY);
+    ctx.arcTo(ex + s, topY, ex + s, topY + s, r);
+    ctx.arcTo(ex + s, topY + s, ex, topY + s, r);
+    ctx.arcTo(ex, topY + s, ex, topY, r);
+    ctx.arcTo(ex, topY, ex + s, topY, r);
+    ctx.closePath();
+    ctx.fill();
+
+    // angry eyebrows
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ex + s * 0.16, topY + s * 0.32);
+    ctx.lineTo(ex + s * 0.4, topY + s * 0.42);
+    ctx.moveTo(ex + s * 0.84, topY + s * 0.32);
+    ctx.lineTo(ex + s * 0.6, topY + s * 0.42);
+    ctx.stroke();
+
+    // glowing red eyes
+    ctx.shadowColor = 'rgba(255,30,30,0.9)';
+    ctx.shadowBlur = 7;
+    ctx.fillStyle = '#ff3b3b';
+    ctx.fillRect(ex + s * 0.2, topY + s * 0.45, s * 0.16, s * 0.16);
+    ctx.fillRect(ex + s * 0.64, topY + s * 0.45, s * 0.16, s * 0.16);
+    ctx.shadowBlur = 0;
   }
   bounds() {
     return { x: this.x, y: this.y - this.size, w: this.size, h: this.size };
@@ -194,6 +269,9 @@ class Bat {
     this.x = cx; this.y = cy;
     this.alive = true;
     this.wing = 0;
+  }
+  kill() {
+    this.alive = false;
   }
   update(dt) {
     if (!this.alive) return;
@@ -264,6 +342,9 @@ class Player {
     this.angle = 0;
     this.standingPlatform = null;
     this.squash = 0;
+    this.lookX = 0;
+    this.blinkIn = 2 + Math.random() * 2;
+    this.blinking = 0;
   }
   bounds() {
     return { x: this.x - this.r, y: this.y - this.r, w: this.r * 2, h: this.r * 2 };
@@ -307,6 +388,19 @@ class Player {
 
     this.angle += (this.vx / this.r) * dt;
     this.squash = Math.max(0, this.squash - dt * 5);
+
+    const targetLook = Math.max(-1, Math.min(1, this.vx / 180));
+    this.lookX += (targetLook - this.lookX) * Math.min(1, dt * 8);
+
+    if (this.blinking > 0) {
+      this.blinking -= dt;
+    } else {
+      this.blinkIn -= dt;
+      if (this.blinkIn <= 0) {
+        this.blinking = 0.12;
+        this.blinkIn = 2.5 + Math.random() * 2.5;
+      }
+    }
   }
   resolveCollisions(platforms, axis) {
     const b = this.bounds();
@@ -365,16 +459,30 @@ class Player {
     ctx.restore();
 
     // friendly face, stays upright while the body rolls
-    ctx.fillStyle = '#2a0808';
-    ctx.beginPath();
-    ctx.ellipse(-6, -4, 3, 3.8, 0, 0, Math.PI * 2);
-    ctx.ellipse(6, -4, 3, 3.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(-5.3, -5.6, 1, 0, Math.PI * 2);
-    ctx.arc(6.7, -5.6, 1, 0, Math.PI * 2);
-    ctx.fill();
+    const lookX = this.lookX * 1.4;
+    const lookY = Math.max(-1, Math.min(1, this.vy / 700)) * 1.2;
+
+    if (this.blinking > 0) {
+      ctx.strokeStyle = '#2a0808';
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-9, -4); ctx.lineTo(-3, -4);
+      ctx.moveTo(3, -4); ctx.lineTo(9, -4);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#2a0808';
+      ctx.beginPath();
+      ctx.ellipse(-6, -4, 3, 3.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(6, -4, 3, 3.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(-6 + lookX, -4.5 + lookY, 1.1, 0, Math.PI * 2);
+      ctx.arc(6 + lookX, -4.5 + lookY, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.strokeStyle = '#2a0808';
     ctx.lineWidth = 1.6;
     ctx.lineCap = 'round';
@@ -817,13 +925,13 @@ function update(dt) {
 
   const hazards = [...level.enemies, ...level.bats];
   for (const e of hazards) {
-    e.update(dt);
+    e.update(dt, level.platforms);
     if (!e.alive) continue;
     const eb = e.bounds();
     if (rectsOverlap(player.bounds(), eb)) {
       const fallingOnTop = player.vy > 0 && (player.y - player.r) < eb.y + eb.h * 0.5;
       if (fallingOnTop) {
-        e.alive = false;
+        e.kill();
         player.vy = -JUMP_SPEED * 0.6;
         score += 2;
         updateHud();
